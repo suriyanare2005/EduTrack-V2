@@ -87,7 +87,8 @@ def reset_password(email_data: dict, db: Session = Depends(get_db)):
         algorithm=settings.JWT_ALGORITHM
     )
     
-    reset_link = f"http://localhost:5173/auth/reset-password?email={email}&token={reset_token}"
+    frontend_base = settings.FRONTEND_URL.rstrip("/")
+    reset_link = f"{frontend_base}/auth/reset-password?email={email}&token={reset_token}"
     
     # Send email via SMTP if settings are configured
     smtp_enabled = bool(settings.SMTP_USER and settings.SMTP_PASSWORD)

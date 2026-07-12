@@ -10,7 +10,11 @@ services:
         value: ""
       - key: JWT_SECRET
         generateValue: true
-      - key: OPENAI_API_KEY
+      - key: GEMINI_API_KEY
+        value: ""
+      - key: CORS_ORIGINS
+        value: ""
+      - key: FRONTEND_URL
         value: ""
       - key: PORT
         value: "8000"

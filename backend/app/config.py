@@ -8,7 +8,8 @@ class Settings:
     ENV: str = os.getenv("ENV", "development")
     
     # Auto-adjust postgres schemes for SQLAlchemy compat
-    db_url = os.getenv("DATABASE_URL", "sqlite:///./edutrack.db")
+    db_env = os.getenv("DATABASE_URL", "")
+    db_url = db_env if db_env and db_env.strip() else "sqlite:///./edutrack.db"
     if db_url.startswith("postgres://"):
         db_url = db_url.replace("postgres://", "postgresql://", 1)
         
@@ -28,5 +29,15 @@ class Settings:
     SMTP_USER: str = os.getenv("SMTP_USER", "")
     SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
     SMTP_FROM: str = os.getenv("SMTP_FROM", "noreply@edutrack.com")
+
+    # CORS configuration
+    CORS_ORIGINS: list[str] = [
+        origin.strip() 
+        for origin in os.getenv("CORS_ORIGINS", "").split(",") 
+        if origin.strip()
+    ]
+    
+    # Frontend URL configuration
+    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
 settings = Settings()

@@ -5,11 +5,16 @@ const isNative = typeof window !== 'undefined' && (
   /android/i.test(navigator.userAgent)
 );
 
-export const API_BASE_URL = isNative
-  ? 'http://10.42.48.117:8000'
-  : (hostname === 'localhost' || hostname === '127.0.0.1')
-    ? 'http://localhost:8000'
-    : `http://${hostname}:8000`;
+const apiEnvUrl = import.meta.env.VITE_API_URL;
+const resolvedBaseUrl = apiEnvUrl 
+  ? (apiEnvUrl.endsWith('/') ? apiEnvUrl.slice(0, -1) : apiEnvUrl)
+  : (isNative
+    ? 'http://10.42.48.117:8000'
+    : (hostname === 'localhost' || hostname === '127.0.0.1')
+      ? 'http://localhost:8000'
+      : `http://${hostname}:8000`);
+
+export const API_BASE_URL = resolvedBaseUrl;
 
 export async function apiRequest<T>(
   path: string, 

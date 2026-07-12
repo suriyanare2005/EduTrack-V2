@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.config import settings
 from app.database import engine, Base
 from app.api import auth, loans, payments, reminders, notifications, documents, ai
 from app.scheduler import start_scheduler, stop_scheduler
@@ -22,9 +23,20 @@ def shutdown_event():
     stop_scheduler()
 
 # CORS middleware configurations
+allowed_origins = settings.CORS_ORIGINS
+if not allowed_origins:
+    allowed_origins = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "capacitor://localhost",
+        "http://localhost",
+    ]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins in sandbox
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
