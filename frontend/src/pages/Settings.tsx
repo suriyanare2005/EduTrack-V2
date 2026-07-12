@@ -20,7 +20,7 @@ export const Settings: React.FC = () => {
   
   // Zustand State bindings
   const profile = useAuthStore((state) => state.profile);
-  const setProfile = useAuthStore((state) => state.setProfile);
+  const updateProfileAction = useAuthStore((state) => state.updateProfileAction);
   const clearAuth = useAuthStore((state) => state.clearAuth);
   
   const darkMode = useUIStore((state) => state.darkMode);
@@ -30,6 +30,7 @@ export const Settings: React.FC = () => {
   const payments = useLoansStore((state) => state.payments);
   const reminders = useLoansStore((state) => state.reminders);
   const documents = useLoansStore((state) => state.documents);
+  const clearStore = useLoansStore((state) => state.clearStore);
 
   // Form / Toggle Edit states
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -42,23 +43,25 @@ export const Settings: React.FC = () => {
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [signOutDialogOpen, setSignOutDialogOpen] = useState(false);
 
-  // Save profile changes locally
-  const handleSaveProfile = (e: React.FormEvent) => {
+  // Save profile changes to backend
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profileName.trim()) {
       toast.error('Name cannot be blank');
       return;
     }
     
-    setProfile({
-      id: profile?.id || 'usr-mock-99',
-      fullName: profileName,
-      email: profileEmail,
-      created_at: profile?.created_at || new Date().toISOString()
-    });
-    
-    setIsEditingProfile(false);
-    toast.success('Profile details updated successfully');
+    toast.loading('Saving profile changes...', { id: 'save-profile' });
+    try {
+      await updateProfileAction(profileName, profileEmail);
+      toast.success('Profile details updated successfully', { id: 'save-profile' });
+      setIsEditingProfile(false);
+    } catch (err: any) {
+      toast.error('Failed to update profile', {
+        id: 'save-profile',
+        description: err.message || 'Check your internet connection.'
+      });
+    }
   };
 
   // Export JSON database utility
@@ -147,6 +150,7 @@ export const Settings: React.FC = () => {
   // Sign out handler
   const handleSignOut = () => {
     clearAuth();
+    clearStore();
     setSignOutDialogOpen(false);
     toast.info('Logged out securely');
     navigate('/auth/login');

@@ -90,3 +90,80 @@ def delete_document(
     db.delete(doc)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+from fastapi.responses import FileResponse
+from fastapi import Request, Query
+import jwt
+from jwt.exceptions import PyJWTError as JWTError
+
+@router.get("/{doc_id}/file")
+def get_document_file(
+    doc_id: str,
+    request: Request,
+    token: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    # 1. Read token from query parameter or header
+    auth_token = token
+    if not auth_token:
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            auth_token = auth_header.split(" ")[1]
+            
+    if not auth_token:
+        raise HTTPException(status_code=401, detail="Authentication token is required")
+        
+    # 2. Decode and verify JWT
+    try:
+        from app.config import settings
+        payload = jwt.decode(auth_token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token payload")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Token has expired or is invalid")
+
+    doc = db.query(Document).join(Loan).filter(Document.id == doc_id, Loan.user_id == user_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+        
+    if not os.path.exists(doc.file_path):
+        raise HTTPException(status_code=404, detail="File not found on disk")
+        
+    media_type = "application/octet-stream"
+    ext = os.path.splitext(doc.file_path)[1].lower()
+    if ext == ".pdf":
+        media_type = "application/pdf"
+    elif ext in [".png", ".jpg", ".jpeg"]:
+        media_type = f"image/{ext[1:]}"
+        if ext == ".jpg":
+            media_type = "image/jpeg"
+        
+    return FileResponse(doc.file_path, media_type=media_type, filename=doc.name)
+
+@router.put("/{doc_id}", response_model=DocumentOut)
+def update_document(
+    doc_id: str,
+    data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    doc = db.query(Document).join(Loan).filter(Document.id == doc_id, Loan.user_id == current_user.id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+        
+    if "name" in data:
+        doc.name = data["name"]
+    if "expiry_date" in data:
+        exp_date_str = data["expiry_date"]
+        if exp_date_str:
+            try:
+                doc.expiry_date = date.fromisoformat(exp_date_str)
+            except ValueError:
+                pass
+        else:
+            doc.expiry_date = None
+            
+    db.commit()
+    db.refresh(doc)
+    return doc

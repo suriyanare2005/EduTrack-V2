@@ -12,7 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { Progress } from '@/components/ui/progress';
 import { EmptyState } from '../components/shared/EmptyState';
 import { toast } from 'sonner';
-import { FileText, Plus, Search, MoreVertical, Trash2, Eye, Share2, Upload, Calendar } from 'lucide-react';
+import { FileText, Plus, Search, MoreVertical, Trash2, Eye, Share2, Upload, Calendar, Edit } from 'lucide-react';
 
 
 export const Documents: React.FC = () => {
@@ -21,6 +21,7 @@ export const Documents: React.FC = () => {
   const documents = useLoansStore((state) => state.documents);
   const addDocument = useLoansStore((state) => state.addDocument);
   const removeDocument = useLoansStore((state) => state.removeDocument);
+  const updateDocument = useLoansStore((state) => state.updateDocument);
 
   // Filter states
   const [selectedLoanFilter, setSelectedLoanFilter] = useState<string>('all');
@@ -31,6 +32,11 @@ export const Documents: React.FC = () => {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+
+  // Rename bottom sheet states
+  const [renameSheetOpen, setRenameSheetOpen] = useState(false);
+  const [renameDocId, setRenameDocId] = useState('');
+  const [renameDocName, setRenameDocName] = useState('');
 
   // Form states
   const [uploadLoanId, setUploadLoanId] = useState('');
@@ -112,6 +118,20 @@ export const Documents: React.FC = () => {
       });
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleRenameSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!renameDocName.trim()) return;
+    try {
+      await updateDocument(renameDocId, renameDocName);
+      toast.success('Document renamed successfully!');
+      setRenameSheetOpen(false);
+    } catch (err: any) {
+      toast.error('Failed to rename document', {
+        description: err.message || 'An error occurred.'
+      });
     }
   };
 
@@ -302,6 +322,13 @@ export const Documents: React.FC = () => {
                         <DropdownMenuItem onClick={() => navigate(`/documents/${doc.id}/preview`)} className="text-xs flex items-center gap-2">
                           <Eye className="w-3.5 h-3.5" /> View Preview
                         </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => {
+                          setRenameDocId(doc.id);
+                          setRenameDocName(doc.name);
+                          setRenameSheetOpen(true);
+                        }} className="text-xs flex items-center gap-2">
+                          <Edit className="w-3.5 h-3.5" /> Rename
+                        </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => handleShare(doc.name)} className="text-xs flex items-center gap-2">
                           <Share2 className="w-3.5 h-3.5" /> Share
                         </DropdownMenuItem>
@@ -456,6 +483,38 @@ export const Documents: React.FC = () => {
               className="w-full py-5 bg-primary hover:bg-primary-light text-white rounded-2xl font-bold transition-all duration-300 flex items-center justify-center mt-4"
             >
               {uploading ? 'Processing File...' : 'Upload to Vault'}
+            </Button>
+          </form>
+        </SheetContent>
+      </Sheet>
+      {/* Rename Document Sheet */}
+      <Sheet open={renameSheetOpen} onOpenChange={setRenameSheetOpen}>
+        <SheetContent side="bottom" className="rounded-t-3xl max-w-md mx-auto p-6 focus-visible:outline-none">
+          <SheetHeader className="mb-4">
+            <SheetTitle className="text-lg font-bold">Rename Document</SheetTitle>
+            <SheetDescription className="text-xs text-text-secondary">
+              Update the name of this vault file.
+            </SheetDescription>
+          </SheetHeader>
+
+          <form onSubmit={handleRenameSubmit} className="space-y-4">
+            <div className="space-y-1">
+              <Label htmlFor="renameDocName">Document Name</Label>
+              <Input
+                id="renameDocName"
+                placeholder="e.g. Sanction_Letter_SBI"
+                value={renameDocName}
+                onChange={(e) => setRenameDocName(e.target.value)}
+                className="rounded-xl h-11"
+                required
+              />
+            </div>
+
+            <Button
+              type="submit"
+              className="w-full py-5 bg-primary hover:bg-primary-light text-white rounded-2xl font-bold transition-all duration-300 flex items-center justify-center mt-4"
+            >
+              Save New Name
             </Button>
           </form>
         </SheetContent>

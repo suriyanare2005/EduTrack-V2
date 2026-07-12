@@ -15,7 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { calculateMoratoriumInterest } from '../../lib/finance';
+import { calculateMoratoriumInterest, calculateAccruedInterest, getInterestForMonth } from '../../lib/finance';
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 export const LoanDetail: React.FC = () => {
@@ -76,7 +76,6 @@ export const LoanDetail: React.FC = () => {
   // Recharts Monthly Interest Accrued Mock Trend Data
   const chartData = useMemo(() => {
     if (!loan) return [];
-    const monthlyRate = loan.interestRate / 12 / 100;
     const data = [];
     const now = new Date();
     
@@ -84,13 +83,11 @@ export const LoanDetail: React.FC = () => {
       const d = new Date();
       d.setMonth(now.getMonth() - i);
       const label = d.toLocaleDateString('en-IN', { month: 'short' });
-      // Simulate interest based on outstanding
-      const factor = 1 + (i * 0.005);
-      const interest = Math.round(loan.outstandingBalance * factor * monthlyRate);
+      const interest = getInterestForMonth(loan, d, payments);
       data.push({ name: label, Interest: interest });
     }
     return data;
-  }, [loan]);
+  }, [loan, payments]);
 
   if (!loan) return null;
 
@@ -158,23 +155,30 @@ export const LoanDetail: React.FC = () => {
     }
   };
 
-  const handleDocumentUpload = () => {
-    toast.info('Document Vault Upload', {
-      description: 'Document selection started... (Mock upload successful)',
-    });
-    
-    // Inject a mock document
-    const mockDoc = {
-      id: `doc-mock-${Math.random().toString(36).substr(2, 9)}`,
-      loanId: loan.id,
-      name: 'Logged_Disbursement_Receipt.pdf',
-      category: 'disbursement' as const,
-      filePath: '/mock-documents/SBI_Disburse.pdf',
-      fileSize: 1024 * 720,
-      createdAt: new Date().toISOString().split('T')[0],
-    };
+  const handleRealFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      const formData = new FormData();
+      formData.append('loan_id', loan.id);
+      formData.append('name', file.name);
+      formData.append('category', 'other');
+      formData.append('file', file);
 
-    addDocument(mockDoc);
+      toast.loading('Uploading document...', { id: 'detail-upload' });
+      try {
+        await addDocument(formData);
+        toast.success('Document uploaded to vault!', { id: 'detail-upload' });
+      } catch (err: any) {
+        toast.error('Upload failed', {
+          id: 'detail-upload',
+          description: err.message || 'Could not upload document.'
+        });
+      }
+    }
+  };
+
+  const handleDocumentUpload = () => {
+    document.getElementById("loan-detail-file-input")?.click();
   };
 
   return (
@@ -257,7 +261,7 @@ export const LoanDetail: React.FC = () => {
                 <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Cumulative Interest Paid/Accrued</span>
                 <div className="flex justify-between items-center mt-1">
                   <span className="text-2xl font-bold font-mono text-text-primary">
-                    {formatCurrency(loan.id === 'loan-sbi-123' ? 145000 : 18900)}
+                    {formatCurrency(calculateAccruedInterest(loan, payments))}
                   </span>
                   <span className="text-[10px] font-semibold text-text-secondary bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full capitalize">
                     {loan.interestType} Interest
@@ -517,6 +521,13 @@ export const LoanDetail: React.FC = () => {
             )}
           </TabsContent>
         </Tabs>
+        <input
+          type="file"
+          id="loan-detail-file-input"
+          className="hidden"
+          onChange={handleRealFileChange}
+          accept=".pdf,.jpg,.jpeg,.png"
+        />
       </div>
     </AppShell>
   );

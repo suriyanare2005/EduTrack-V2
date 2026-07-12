@@ -27,6 +27,7 @@ interface LoansState {
   setDocuments: (documents: DocumentItem[]) => void;
   addDocument: (documentOrFormData: DocumentItem | FormData) => Promise<DocumentItem>;
   removeDocument: (id: string) => Promise<void>;
+  updateDocument: (id: string, name: string) => Promise<DocumentItem>;
 
   setNotifications: (notifications: NotificationItem[]) => void;
   markNotificationRead: (id: string) => Promise<void>;
@@ -40,183 +41,17 @@ interface LoansState {
   fetchNotifications: () => Promise<void>;
   fetchDocuments: () => Promise<void>;
   syncWithBackend: () => Promise<void>;
+  clearStore: () => void;
 }
 
 // Helper to get formatted dates relative to current date for mock consistency
-const getPastDate = (monthsAgo: number, day: number): string => {
-  const d = new Date();
-  d.setMonth(d.getMonth() - monthsAgo);
-  d.setDate(day);
-  return d.toISOString().split('T')[0];
-};
-
-const getFutureDate = (monthsAhead: number, day: number): string => {
-  const d = new Date();
-  d.setMonth(d.getMonth() + monthsAhead);
-  d.setDate(day);
-  return d.toISOString().split('T')[0];
-};
-
-const initialLoans: Loan[] = [
-  {
-    id: 'loan-sbi-123',
-    nickname: 'SBI Premier Loan',
-    lender: 'State Bank of India',
-    type: 'education',
-    principal: 1500000,
-    disbursedAmount: 1500000,
-    outstandingBalance: 1245000,
-    interestRate: 9.55,
-    interestType: 'compound',
-    tenureMonths: 120,
-    disbursementDate: '2023-07-15',
-    emiStartDate: '2024-08-10',
-    moratorium: {
-      enabled: true,
-      startDate: '2023-07-15',
-      endDate: '2024-07-15',
-    },
-    status: 'repaying',
-    nextEmiDate: getFutureDate(0, 10),
-    nextEmiAmount: 19450,
-    notes: 'Primary loan for B.Tech CSE tuition and living fees.',
-  },
-  {
-    id: 'loan-hdfc-456',
-    nickname: 'HDFC Study Abroad',
-    lender: 'HDFC Bank',
-    type: 'education',
-    principal: 800000,
-    disbursedAmount: 400000,
-    outstandingBalance: 400000,
-    interestRate: 11.2,
-    interestType: 'simple',
-    tenureMonths: 84,
-    disbursementDate: '2026-01-10',
-    emiStartDate: '2027-02-10',
-    moratorium: {
-      enabled: true,
-      startDate: '2026-01-10',
-      endDate: '2027-01-10',
-    },
-    status: 'moratorium',
-    nextEmiDate: getFutureDate(0, 10),
-    nextEmiAmount: 3733,
-    notes: 'Top-up loan for hostel fees and laptop expense.',
-  },
-];
-
-const initialPayments: Payment[] = [
-  {
-    id: 'pay-sbi-1',
-    loanId: 'loan-sbi-123',
-    paymentDate: getPastDate(1, 10),
-    amount: 19450,
-    principalComponent: 9550,
-    interestComponent: 9900,
-    paymentMode: 'auto_debit',
-    notes: 'Auto-debit clearing'
-  },
-  {
-    id: 'pay-sbi-2',
-    loanId: 'loan-sbi-123',
-    paymentDate: getPastDate(2, 10),
-    amount: 19450,
-    principalComponent: 9470,
-    interestComponent: 9980,
-    paymentMode: 'auto_debit',
-  },
-  {
-    id: 'pay-sbi-3',
-    loanId: 'loan-sbi-123',
-    paymentDate: getPastDate(3, 10),
-    amount: 19450,
-    principalComponent: 9390,
-    interestComponent: 10060,
-    paymentMode: 'upi',
-    notes: 'Paid manually via GPay'
-  },
-];
-
-const initialReminders: Reminder[] = [
-  {
-    id: 'rem-sbi',
-    loanId: 'loan-sbi-123',
-    label: 'SBI Loan EMI Payment',
-    dueDate: getFutureDate(0, 10),
-    daysBefore: 3,
-    recurrence: 'monthly',
-    channelInApp: true,
-    channelPush: true,
-    isActive: true,
-  },
-  {
-    id: 'rem-hdfc',
-    loanId: 'loan-hdfc-456',
-    label: 'HDFC Moratorium Pre-EMI',
-    dueDate: getFutureDate(0, 10),
-    daysBefore: 1,
-    recurrence: 'monthly',
-    channelInApp: true,
-    channelPush: false,
-    isActive: true,
-  },
-];
-
-const initialDocuments: DocumentItem[] = [
-  {
-    id: 'doc-sbi-sanction',
-    loanId: 'loan-sbi-123',
-    name: 'SBI_Loan_Sanction_Letter.pdf',
-    category: 'sanction_letter',
-    filePath: '/mock-documents/SBI_Sanction.pdf',
-    fileSize: 1024 * 1024 * 2.4,
-    createdAt: getPastDate(12, 15),
-  },
-  {
-    id: 'doc-sbi-disburse',
-    loanId: 'loan-sbi-123',
-    name: 'SBI_Disbursement_Receipt_1.pdf',
-    category: 'disbursement',
-    filePath: '/mock-documents/SBI_Disburse.pdf',
-    fileSize: 1024 * 512,
-    createdAt: getPastDate(12, 20),
-  },
-];
-
-const initialNotifications: NotificationItem[] = [
-  {
-    id: 'notif-1',
-    type: 'reminder',
-    title: 'Upcoming EMI Due',
-    body: 'Your EMI of ₹19,450 for SBI Premier Loan is due in 3 days (Jul 10).',
-    isRead: false,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'notif-2',
-    type: 'moratorium',
-    title: 'Daily Accrued Interest Update',
-    body: 'Interest of ₹122.74 accrued yesterday on your HDFC Study Abroad loan.',
-    isRead: false,
-    createdAt: getPastDate(0, 25),
-  },
-  {
-    id: 'notif-3',
-    type: 'system',
-    title: 'Welcome to EduTrack! 👋',
-    body: 'Start tracking your education loans and optimize your repayment plan.',
-    isRead: true,
-    createdAt: getPastDate(0, 20),
-  },
-];
 
 export const useLoansStore = create<LoansState>((set, get) => ({
-  loans: initialLoans,
-  payments: initialPayments,
-  reminders: initialReminders,
-  documents: initialDocuments,
-  notifications: initialNotifications,
+  loans: [],
+  payments: [],
+  reminders: [],
+  documents: [],
+  notifications: [],
   loading: false,
 
   setLoans: (loans) => set({ loans }),
@@ -352,6 +187,16 @@ export const useLoansStore = create<LoansState>((set, get) => ({
       documents: state.documents.filter((d) => d.id !== id),
     }));
   },
+  updateDocument: async (id, name) => {
+    const data = await apiRequest<DocumentItem>(`/api/documents/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ name }),
+    });
+    set((state) => ({
+      documents: state.documents.map((d) => (d.id === id ? data : d)),
+    }));
+    return data;
+  },
 
   setNotifications: (notifications) => set({ notifications }),
 
@@ -457,5 +302,15 @@ export const useLoansStore = create<LoansState>((set, get) => ({
     } finally {
       set({ loading: false });
     }
+  },
+
+  clearStore: () => {
+    set({
+      loans: [],
+      payments: [],
+      reminders: [],
+      documents: [],
+      notifications: [],
+    });
   },
 }));

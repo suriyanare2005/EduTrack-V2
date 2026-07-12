@@ -4,17 +4,19 @@ import { motion } from 'framer-motion';
 import { Bell, Plus, MessageSquare, Calculator, FolderOpen, TrendingUp, Calendar, ArrowUpRight } from 'lucide-react';
 import { AppShell } from '../components/layout/AppShell';
 import { useLoansStore } from '../store/useLoansStore';
-import { useUIStore } from '../store/useUIStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { StatusBadge } from '../components/shared/StatusBadge';
 import { ProgressBar } from '../components/shared/ProgressBar';
 import { EmptyState } from '../components/shared/EmptyState';
 import { Button } from '@/components/ui/button';
+import { calculateAccruedInterest } from '../lib/finance';
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const loans = useLoansStore((state) => state.loans);
-  const notificationCount = useUIStore((state) => state.notificationCount);
+  const payments = useLoansStore((state) => state.payments);
+  const notifications = useLoansStore((state) => state.notifications);
+  const notificationCount = useMemo(() => notifications.filter(n => !n.isRead).length, [notifications]);
   const profile = useAuthStore((state) => state.profile);
 
   // Compute Greetings based on local time
@@ -33,15 +35,13 @@ export const Dashboard: React.FC = () => {
       return { totalOutstanding: 0, totalPrincipal: 0, totalInterestAccrued: 0, nextDueDate: 'N/A' };
     }
 
-    const totalOutstanding = loans.reduce((acc, loan) => acc + loan.outstandingBalance, 0);
-    const totalPrincipal = loans.reduce((acc, loan) => acc + loan.principal, 0);
+    const totalOutstanding = loans.reduce((acc, loan) => acc + Number(loan.outstandingBalance || 0), 0);
+    const totalPrincipal = loans.reduce((acc, loan) => acc + Number(loan.principal || 0), 0);
     
     // Interest Accrued Mock calculations for UI display
     // In a real app, this is retrieved from payment components and daily accrual schedules
     const totalInterestAccrued = loans.reduce((acc, loan) => {
-      if (loan.id === 'loan-sbi-123') return acc + 145000;
-      if (loan.id === 'loan-hdfc-456') return acc + 18900;
-      return acc + (loan.principal * 0.05); // Default fallback
+      return acc + calculateAccruedInterest(loan, payments);
     }, 0);
 
     // Find earliest EMI due date
@@ -101,18 +101,18 @@ export const Dashboard: React.FC = () => {
               {formatCurrency(financialSummary.totalOutstanding)}
             </h3>
             
-            <div className="grid grid-cols-3 gap-2 border-t border-indigo-500/30 pt-4">
+            <div className="grid grid-cols-2 gap-y-3 gap-x-4 border-t border-indigo-500/30 pt-4">
               <div>
                 <span className="text-[10px] text-indigo-200 block">Total Principal</span>
-                <span className="text-sm font-semibold font-mono">{formatCurrency(financialSummary.totalPrincipal)}</span>
-              </div>
-              <div>
-                <span className="text-[10px] text-indigo-200 block">Interest Accrued</span>
-                <span className="text-sm font-semibold font-mono">{formatCurrency(financialSummary.totalInterestAccrued)}</span>
+                <span className="text-sm font-bold font-mono">{formatCurrency(financialSummary.totalPrincipal)}</span>
               </div>
               <div className="text-right">
-                <span className="text-[10px] text-indigo-200 block">Next Due Date</span>
-                <span className="text-sm font-semibold">{financialSummary.nextDueDate}</span>
+                <span className="text-[10px] text-indigo-200 block">Interest Accrued</span>
+                <span className="text-sm font-bold font-mono text-indigo-100">{formatCurrency(financialSummary.totalInterestAccrued)}</span>
+              </div>
+              <div className="col-span-2 flex justify-between items-center border-t border-indigo-500/20 pt-2.5 text-[10px] text-indigo-200">
+                <span>Next Due Date</span>
+                <span className="font-semibold text-white text-xs">{financialSummary.nextDueDate}</span>
               </div>
             </div>
           </div>

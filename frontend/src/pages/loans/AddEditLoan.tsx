@@ -54,6 +54,7 @@ export const AddEditLoan: React.FC = () => {
   const addLoan = useLoansStore((state) => state.addLoan);
   const updateLoan = useLoansStore((state) => state.updateLoan);
   const removeLoan = useLoansStore((state) => state.removeLoan);
+  const loading = useLoansStore((state) => state.loading);
 
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -96,6 +97,8 @@ export const AddEditLoan: React.FC = () => {
   // Load existing loan data in edit mode
   useEffect(() => {
     if (isEditMode && id) {
+      if (loading) return; // Wait for store sync to finish
+      
       const loan = loans.find((l) => l.id === id);
       if (loan) {
         const isYears = loan.tenureMonths % 12 === 0;
@@ -120,7 +123,7 @@ export const AddEditLoan: React.FC = () => {
         navigate('/dashboard', { replace: true });
       }
     }
-  }, [id, isEditMode, loans, reset, navigate]);
+  }, [id, isEditMode, loans, loading, reset, navigate]);
 
   // Sync outstanding balance to principal automatically for new loans when principal changes
   useEffect(() => {
@@ -182,11 +185,11 @@ export const AddEditLoan: React.FC = () => {
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
       if (isEditMode) {
-        updateLoan(loanPayload);
+        await updateLoan(loanPayload);
         toast.success('Loan updated successfully');
         navigate(`/loans/${id}`);
       } else {
-        addLoan(loanPayload);
+        await addLoan(loanPayload);
         toast.success('Loan added successfully');
         navigate('/dashboard');
       }
@@ -200,7 +203,7 @@ export const AddEditLoan: React.FC = () => {
   const handleDelete = async () => {
     if (!id) return;
     try {
-      removeLoan(id);
+      await removeLoan(id);
       toast.success('Loan deleted successfully');
       navigate('/dashboard', { replace: true });
     } catch (err) {

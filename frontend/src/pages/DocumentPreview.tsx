@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
-import { apiRequest } from '../lib/api';
+import { apiRequest, API_BASE_URL } from '../lib/api';
 
 export const DocumentPreview: React.FC = () => {
   const { docId } = useParams<{ docId: string }>();
@@ -60,7 +60,13 @@ export const DocumentPreview: React.FC = () => {
   const handleZoomIn = () => setZoom((prev) => Math.min(prev + 25, 200));
   const handleZoomOut = () => setZoom((prev) => Math.max(prev - 25, 50));
 
+  const token = localStorage.getItem('token');
+  const fileUrl = `${API_BASE_URL}/api/documents/${doc.id}/file${token ? `?token=${token}` : ''}`;
+  const isImage = !!doc.name.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp)$/);
+  const isPdf = doc.name.toLowerCase().endsWith('.pdf');
+
   const handleDownload = () => {
+    window.open(fileUrl, '_blank');
     toast.success('Download Started', {
       description: `Downloading ${doc.name} to your local device.`,
     });
@@ -168,130 +174,37 @@ export const DocumentPreview: React.FC = () => {
           </div>
         </div>
 
-        {/* Interactive Mock Document Viewer Canvas */}
-        <div className="overflow-auto border border-border bg-slate-100 dark:bg-slate-900 rounded-3xl p-4 flex justify-center shadow-inner min-h-[450px]">
-          <div 
-            style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top center' }}
-            className="w-full max-w-[595px] bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-800 p-8 rounded-2xl shadow-lg transition-transform duration-200 flex flex-col justify-between font-serif aspect-[1/1.4]"
-          >
-            {/* Document Bank Header */}
-            <div>
-              <div className="flex justify-between items-start border-b-2 border-slate-900 dark:border-slate-100 pb-4 mb-6">
-                <div>
-                  <h1 className="text-xl font-bold uppercase tracking-wider text-slate-900 dark:text-white font-sans">
-                    {linkedLoan?.lender || 'National Banking Institution'}
-                  </h1>
-                  <p className="text-[9px] font-sans text-slate-500 uppercase">Education Loan Division • Retail Banking Group</p>
-                </div>
-                <div className="text-right text-[9px] font-sans text-slate-500">
-                  <p>Ref: STU/EDUL/{doc.id.toUpperCase()}</p>
-                  <p>Date: {doc.createdAt}</p>
-                </div>
-              </div>
-
-              {/* Document Title */}
-              <h2 className="text-center font-bold text-sm uppercase tracking-wide underline mb-6 text-slate-900 dark:text-white">
-                {doc.category === 'sanction_letter' && 'LETTER OF SANCTION FOR EDUCATION LOAN'}
-                {doc.category === 'disbursement' && 'PAYMENT DISBURSEMENT ADVICE'}
-                {doc.category === 'noc' && 'NO OBJECTION / LOAN CLOSURE CERTIFICATE'}
-                {doc.category === 'itr' && 'INCOME & TAX RETURN STATEMENT'}
-                {doc.category === 'other' && 'GENERAL CORRESPONDENCE RECORD'}
-              </h2>
-
-              {/* Document Body */}
-              <div className="text-[11px] leading-relaxed space-y-4">
-                <p>To Whom It May Concern,</p>
-                
-                {doc.category === 'sanction_letter' && (
-                  <>
-                    <p>
-                      We are pleased to inform that the competent authority has sanctioned an education loan facility of{' '}
-                      <strong className="text-slate-900 dark:text-white font-sans">₹15,00,000 (Rupees Fifteen Lakhs Only)</strong> to{' '}
-                      <strong>Suriya K</strong> for pursuing B.Tech Computer Science and Engineering course program.
-                    </p>
-                    <table className="w-full border-collapse border border-slate-300 dark:border-slate-700 text-[10px] font-sans">
-                      <tbody>
-                        <tr className="border-b border-slate-300 dark:border-slate-700">
-                          <td className="p-1.5 font-bold bg-slate-50 dark:bg-slate-900 w-1/3">Principal Sanctioned</td>
-                          <td className="p-1.5">₹15,00,000</td>
-                        </tr>
-                        <tr className="border-b border-slate-300 dark:border-slate-700">
-                          <td className="p-1.5 font-bold bg-slate-50 dark:bg-slate-900">Applicable Interest Rate</td>
-                          <td className="p-1.5">9.55% p.a. (Floating linked to EBLR)</td>
-                        </tr>
-                        <tr className="border-b border-slate-300 dark:border-slate-700">
-                          <td className="p-1.5 font-bold bg-slate-50 dark:bg-slate-900">Repayment Tenure</td>
-                          <td className="p-1.5">120 Months (10 Years)</td>
-                        </tr>
-                        <tr>
-                          <td className="p-1.5 font-bold bg-slate-50 dark:bg-slate-900">Moratorium Schedule</td>
-                          <td className="p-1.5">Course Duration + 12 Months grace period</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                    <p>This sanction is subject to compliance checks, mortgage verification, and delivery of co-signer assurances as per standard guidelines.</p>
-                  </>
-                )}
-
-                {doc.category === 'disbursement' && (
-                  <>
-                    <p>
-                      This is to advise that a disbursement of <strong className="text-slate-900 dark:text-white">₹5,00,000 (Rupees Five Lakhs Only)</strong> has
-                      been executed from your education loan account on <strong>{doc.createdAt}</strong>.
-                    </p>
-                    <p>The funds were directly credited to the academic institute bank account via electronic transfer for Semester Fees.</p>
-                    <div className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded border border-slate-200 dark:border-slate-800 font-mono text-[9px] space-y-1">
-                      <p>Beneficiary: National Institute of Technology</p>
-                      <p>Tranche: 1st Installment</p>
-                      <p>Reference ID: RTGS/SBIN/881203</p>
-                    </div>
-                  </>
-                )}
-
-                {doc.category === 'noc' && (
-                  <>
-                    <p>
-                      This is to certify that the education loan account reference ID <strong>{docId}</strong> has been closed and fully settled. 
-                      The lender confirms there are no further dues or outstanding liability under the co-signer agreement.
-                    </p>
-                    <p>All hypothecated assets and certificates are released with immediate effect.</p>
-                  </>
-                )}
-
-                {doc.category === 'itr' && (
-                  <>
-                    <p>
-                      Summary of verified taxable income statements submitted as verification for financial co-signing. 
-                      Annual taxable salary is confirmed at ₹8,40,000 for FY 2025-2026.
-                    </p>
-                    <p>Assessment status: Approved / Active.</p>
-                  </>
-                )}
-
-                {doc.category === 'other' && (
-                  <>
-                    <p>General file record belonging to loan reference {doc.loanId}.</p>
-                    <p>Please upload sanction notes or bank correspondence directly inside this vault to enable automatic optical scans.</p>
-                  </>
-                )}
-              </div>
+        {/* Interactive Real Document Viewer Canvas */}
+        <div className="overflow-auto border border-border bg-slate-100 dark:bg-slate-900 rounded-3xl p-4 flex justify-center items-center shadow-inner min-h-[500px]">
+          {isImage ? (
+            <div 
+              style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'center center' }}
+              className="transition-transform duration-200"
+            >
+              <img 
+                src={fileUrl} 
+                alt={doc.name} 
+                className="max-w-full max-h-[70vh] rounded-2xl shadow-lg border border-border" 
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1586075010923-2dd4570fb338?w=500';
+                }}
+              />
             </div>
-
-            {/* Signature Block */}
-            <div className="flex justify-between items-end border-t border-slate-200 dark:border-slate-800 pt-6 mt-12 font-sans">
-              <div className="text-[8px] text-slate-400">
-                <p>Document ID: {doc.id}</p>
-                <p>System Generated Copy - No Signature Required</p>
-              </div>
-              <div className="text-right">
-                <div className="inline-block border border-indigo-300 dark:border-indigo-800 rounded px-2 py-1 bg-indigo-50/20 text-[8px] font-bold text-indigo-600 dark:text-indigo-400 mb-1">
-                  VERIFIED STAMP
-                </div>
-                <p className="text-[9px] font-bold text-slate-900 dark:text-white">Authorized Officer</p>
-                <p className="text-[8px] text-slate-500">{linkedLoan?.lender || 'National Institution'}</p>
-              </div>
+          ) : isPdf ? (
+            <iframe 
+              src={fileUrl} 
+              className="w-full min-h-[600px] border-0 rounded-2xl shadow-lg" 
+              title={doc.name}
+            />
+          ) : (
+            <div className="text-center py-12 space-y-4">
+              <FileText className="w-16 h-16 mx-auto text-text-secondary opacity-50" />
+              <p className="text-sm font-semibold text-text-primary">Preview not supported for this file type</p>
+              <Button onClick={handleDownload} className="bg-primary text-white rounded-xl">
+                <Download className="w-4 h-4 mr-2" /> Download File
+              </Button>
             </div>
-          </div>
+          )}
         </div>
 
       </div>

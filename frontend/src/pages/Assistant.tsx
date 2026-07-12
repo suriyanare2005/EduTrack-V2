@@ -85,7 +85,7 @@ export const Assistant: React.FC = () => {
       const errorMsg: Message = {
         id: `msg-err-${Math.random().toString(36).substr(2, 9)}`,
         sender: 'assistant',
-        text: 'Sorry, I encountered an issue connecting to the AI service. Please make sure your server is online.',
+        text: err.message || 'Sorry, I encountered an issue connecting to the AI service. Please make sure your server is online.',
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMsg]);

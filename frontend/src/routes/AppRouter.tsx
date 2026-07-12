@@ -6,6 +6,7 @@ import { Onboarding } from '../pages/Onboarding';
 import { Login } from '../pages/auth/Login';
 import { SignUp } from '../pages/auth/SignUp';
 import { ForgotPassword } from '../pages/auth/ForgotPassword';
+import { ResetPassword } from '../pages/auth/ResetPassword';
 import { Dashboard } from '../pages/Dashboard';
 import { Calculator } from '../pages/Calculator';
 import { Documents } from '../pages/Documents';
@@ -23,13 +24,44 @@ import { PaymentHistory } from '../pages/loans/PaymentHistory';
 
 import { AuthLayout } from '../components/layout/AuthLayout';
 
-// Simple Auth Guards (Temporary for Phase 1-4 mock flow)
+import { useAuthStore } from '../store/useAuthStore';
+import { LoadingSpinner } from '../components/shared/LoadingSpinner';
+
 const ProtectedRoute: React.FC = () => {
-  // For Phase 1-4, we allow users to access app pages directly
+  const session = useAuthStore((state) => state.session);
+  const loading = useAuthStore((state) => state.loading);
+
+  if (loading) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-slate-50 dark:bg-slate-900">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <Navigate to="/auth/login" replace />;
+  }
+
   return <Outlet />;
 };
 
 const PublicRoute: React.FC = () => {
+  const session = useAuthStore((state) => state.session);
+  const loading = useAuthStore((state) => state.loading);
+
+  if (loading) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-slate-50 dark:bg-slate-900">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  if (session) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   return <Outlet />;
 };
 
@@ -56,6 +88,7 @@ const router = createBrowserRouter([
           { path: '/auth/login', element: <Login /> },
           { path: '/auth/signup', element: <SignUp /> },
           { path: '/auth/forgot-password', element: <ForgotPassword /> },
+          { path: '/auth/reset-password', element: <ResetPassword /> },
         ]
       }
     ],

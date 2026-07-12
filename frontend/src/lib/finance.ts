@@ -1,4 +1,5 @@
 import { addMonths, format } from 'date-fns';
+import type { Loan, Payment } from '../types';
 
 export interface AmortizationRow {
   month: number;
@@ -180,4 +181,104 @@ export const calculatePayoffSimulation = (
     monthsSaved,
     interestSaved,
   };
+};
+
+/**
+ * Calculates interest accrued dynamically for a loan using actual payments and rates
+ */
+export const calculateAccruedInterest = (loan: Loan, payments: Payment[]): number => {
+  if (Number(loan.principal || 0) <= 0 || Number(loan.interestRate || 0) <= 0) return 0;
+  
+  const now = new Date();
+  const disDate = new Date(loan.disbursementDate);
+  
+  // 1. Calculate moratorium interest if enabled
+  let morInterest = 0;
+  if (loan.moratorium?.enabled) {
+    const morStart = new Date(loan.moratorium.startDate);
+    const morEnd = new Date(loan.moratorium.endDate);
+    
+    const effectiveMorEnd = now < morEnd ? now : morEnd;
+    
+    if (effectiveMorEnd > morStart) {
+      if (loan.interestType === 'simple') {
+        morInterest = calculateMoratoriumInterest(
+          Number(loan.principal || 0), 
+          Number(loan.interestRate || 0), 
+          loan.moratorium.startDate, 
+          effectiveMorEnd.toISOString().split('T')[0]
+        );
+      } else {
+        // Compound interest monthly: P * ((1 + r/12)^(n) - 1)
+        const months = Math.max(1, (effectiveMorEnd.getFullYear() - morStart.getFullYear()) * 12 + (effectiveMorEnd.getMonth() - morStart.getMonth()));
+        const r = Number(loan.interestRate || 0) / 12 / 100;
+        morInterest = Math.round(Number(loan.principal || 0) * (Math.pow(1 + r, months) - 1));
+      }
+    }
+  }
+  
+  // 2. Add interest components of all logged payments for this loan
+  const loanPayments = payments.filter((p) => p.loanId === loan.id);
+  const paidInterest = loanPayments.reduce((acc, p) => acc + Number(p.interestComponent || 0), 0);
+  
+  // 3. Estimate daily accrued interest since last payment or emiStartDate
+  let lastPaymentDate = loan.emiStartDate ? new Date(loan.emiStartDate) : disDate;
+  if (loan.moratorium?.enabled) {
+    lastPaymentDate = new Date(loan.moratorium.endDate);
+  }
+  
+  if (loanPayments.length > 0) {
+    const dates = loanPayments.map((p) => new Date(p.paymentDate).getTime());
+    lastPaymentDate = new Date(Math.max(...dates));
+  }
+  
+  let currentAccrual = 0;
+  if (now > lastPaymentDate && loan.status !== 'moratorium' && loan.status !== 'completed') {
+    const diffTime = Math.abs(now.getTime() - lastPaymentDate.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    currentAccrual = (Number(loan.outstandingBalance || 0) * (Number(loan.interestRate || 0) / 100) * (diffDays / 365.25));
+  }
+  
+  return Math.round(Number(morInterest || 0) + Number(paidInterest || 0) + Number(currentAccrual || 0));
+};
+
+/**
+ * Estimates interest accrued in a specific target month for chart visualizations
+ */
+export const getInterestForMonth = (loan: Loan, targetDate: Date, payments: Payment[]): number => {
+  const start = new Date(loan.disbursementDate);
+  if (targetDate < start) return 0;
+  
+  const now = new Date();
+  if (targetDate > now) return 0;
+  
+  const rate = Number(loan.interestRate || 0) / 100;
+  
+  // If inside moratorium:
+  if (loan.moratorium?.enabled) {
+    const morStart = new Date(loan.moratorium.startDate);
+    const morEnd = new Date(loan.moratorium.endDate);
+    if (targetDate >= morStart && targetDate <= morEnd) {
+      return Math.round((Number(loan.principal || 0) * rate) / 12);
+    }
+  }
+  
+  // If inside repayment phase: Check actual payments logged in that month
+  const targetYear = targetDate.getFullYear();
+  const targetMonth = targetDate.getMonth();
+  const paymentsInMonth = payments.filter((p) => {
+    if (p.loanId !== loan.id) return false;
+    const pDate = new Date(p.paymentDate);
+    return pDate.getFullYear() === targetYear && pDate.getMonth() === targetMonth;
+  });
+  
+  if (paymentsInMonth.length > 0) {
+    return Math.round(paymentsInMonth.reduce((acc, p) => acc + Number(p.interestComponent || 0), 0));
+  }
+  
+  // Fallback estimation based on outstanding balance at that time
+  const monthsDiff = (now.getFullYear() - targetYear) * 12 + (now.getMonth() - targetMonth);
+  const estBalance = Number(loan.outstandingBalance || 0) + Math.max(0, monthsDiff * (Number(loan.principal || 0) / Number(loan.tenureMonths || 1)));
+  const finalEstBalance = Math.min(Number(loan.principal || 0), estBalance);
+  return Math.round((finalEstBalance * rate) / 12);
 };

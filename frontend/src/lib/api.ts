@@ -1,4 +1,15 @@
-export const API_BASE_URL = 'http://localhost:8000';
+const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+const isNative = typeof window !== 'undefined' && (
+  window.location.protocol === 'capacitor:' || 
+  window.location.href.includes('android') || 
+  /android/i.test(navigator.userAgent)
+);
+
+export const API_BASE_URL = isNative
+  ? 'http://10.42.48.117:8000'
+  : (hostname === 'localhost' || hostname === '127.0.0.1')
+    ? 'http://localhost:8000'
+    : `http://${hostname}:8000`;
 
 export async function apiRequest<T>(
   path: string, 
@@ -25,5 +36,10 @@ export async function apiRequest<T>(
     throw new Error(errorData.detail || 'Network request failed');
   }
 
-  return response.json() as Promise<T>;
+  if (response.status === 204) {
+    return {} as T;
+  }
+
+  const text = await response.text();
+  return text ? JSON.parse(text) as T : {} as T;
 }

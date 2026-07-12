@@ -4,7 +4,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Bell, Info, Clock, Trash2, CheckSquare } from 'lucide-react';
 import { AppShell } from '../components/layout/AppShell';
 import { useLoansStore } from '../store/useLoansStore';
-import { useUIStore } from '../store/useUIStore';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { EmptyState } from '../components/shared/EmptyState';
 import { toast } from 'sonner';
@@ -16,14 +15,13 @@ export const Notifications: React.FC = () => {
   const markNotificationRead = useLoansStore((state) => state.markNotificationRead);
   const markAllNotificationsRead = useLoansStore((state) => state.markAllNotificationsRead);
   const removeNotification = useLoansStore((state) => state.removeNotification);
-  const setNotificationCount = useUIStore((state) => state.setNotificationCount);
 
   const [activeTab, setActiveTab] = useState<'all' | 'reminder' | 'system' | 'moratorium'>('all');
 
-  // Clear unread badge count on visiting the screen
+  // Clear unread notifications by marking them read on the backend
   useEffect(() => {
-    setNotificationCount(0);
-  }, [setNotificationCount]);
+    markAllNotificationsRead();
+  }, [markAllNotificationsRead]);
 
   // Filter notifications based on active tab
   const filteredNotifications = useMemo(() => {

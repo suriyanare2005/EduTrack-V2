@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -24,6 +24,7 @@ export const Login: React.FC = () => {
   
   const navigate = useNavigate();
   const loginAction = useAuthStore((state) => state.loginAction);
+  const googleLoginAction = useAuthStore((state) => state.googleLoginAction);
 
   const {
     register,
@@ -36,6 +37,54 @@ export const Login: React.FC = () => {
       password: '',
     },
   });
+
+  const handleGoogleCredentialResponse = async (response: any) => {
+    toast.loading('Signing in with Google...', { id: 'google-login' });
+    try {
+      await googleLoginAction(response.credential);
+      toast.success('Logged in via Google!', { id: 'google-login' });
+      navigate('/dashboard');
+    } catch (err: any) {
+      toast.error('Google Sign-In failed', {
+        id: 'google-login',
+        description: err.message || 'Verification failed on server.',
+      });
+    }
+  };
+
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+
+  useEffect(() => {
+    if (!googleClientId) return;
+    const initializeGoogleSignIn = () => {
+      if (typeof window !== 'undefined' && (window as any).google) {
+        (window as any).google.accounts.id.initialize({
+          client_id: googleClientId,
+          callback: handleGoogleCredentialResponse,
+        });
+        (window as any).google.accounts.id.renderButton(
+          document.getElementById("google-signin-button"),
+          { 
+            theme: "outline", 
+            size: "large", 
+            width: "320", 
+            text: "signin_with", 
+            shape: "pill" 
+          }
+        );
+      }
+    };
+
+    initializeGoogleSignIn();
+    const timer = setInterval(() => {
+      if ((window as any).google) {
+        initializeGoogleSignIn();
+        clearInterval(timer);
+      }
+    }, 500);
+
+    return () => clearInterval(timer);
+  }, [googleClientId]);
 
   const onSubmit = async (data: LoginFormValues) => {
     setIsSubmitting(true);
@@ -56,11 +105,7 @@ export const Login: React.FC = () => {
     }
   };
 
-  const handleGoogleLogin = () => {
-    toast.info('Google Sign-In', {
-      description: 'Google OAuth flow is starting... (Mock redirect)',
-    });
-  };
+
 
   return (
     <div className="flex flex-col w-full">
@@ -141,34 +186,17 @@ export const Login: React.FC = () => {
         <div className="flex-grow border-t border-border"></div>
       </div>
 
-      {/* Google Sign In */}
-      <Button
-        variant="outline"
-        onClick={handleGoogleLogin}
-        className="w-full py-5 rounded-2xl border-border text-text-primary font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors duration-200 flex items-center justify-center gap-2"
-      >
-        <svg className="w-5 h-5 mr-1" viewBox="0 0 24 24">
-          <path
-            fill="#EA4335"
-            d="M5.266 9.765A7.077 7.077 0 0 1 12 4.909c1.69 0 3.218.6 4.418 1.582L19.91 3A11.966 11.966 0 0 0 12 .909a11.973 11.973 0 0 0-8.8 3.864l2.066 4.992z"
-          />
-          <path
-            fill="#4285F4"
-            d="M23.091 12.273c0-.818-.082-1.609-.218-2.364H12v4.51h6.218a5.275 5.275 0 0 1-2.29 3.473l3.527 2.736c2.064-1.9 3.255-4.7 3.255-8.355z"
-          />
-          <path
-            fill="#FBBC05"
-            d="M3.2 4.773A11.973 11.973 0 0 0 .909 12c0 2.582.818 4.964 2.227 6.945l2.073-4.99A7.086 7.086 0 0 1 4.909 12c0-.79.127-1.555.355-2.273L3.2 4.773z"
-          />
-          <path
-            fill="#34A853"
-            d="M12 23.091c3.245 0 5.973-1.073 7.964-2.927l-3.527-2.736A7.067 7.067 0 0 1 12 19.091a7.077 7.077 0 0 1-6.734-4.855l-2.073 4.99A11.973 11.973 0 0 0 12 23.091z"
-          />
-        </svg>
-        Continue with Google
-      </Button>
+      {googleClientId ? (
+        <div className="w-full flex justify-center py-1 mt-1">
+          <div id="google-signin-button"></div>
+        </div>
+      ) : (
+        <div className="w-full text-center py-3 px-4 bg-slate-50 dark:bg-slate-900/40 border border-dashed border-border rounded-2xl">
+          <span className="text-[10px] text-text-secondary font-bold uppercase tracking-wider block">Google Sign-In is not configured</span>
+          <span className="text-[9px] text-text-secondary/70 mt-0.5 block">Define VITE_GOOGLE_CLIENT_ID in your environment variables to enable.</span>
+        </div>
+      )}
 
-      {/* Footer link */}
       <p className="text-sm text-text-secondary text-center mt-6">
         Don't have an account?{' '}
         <Link to="/auth/signup" className="text-primary hover:underline font-semibold">

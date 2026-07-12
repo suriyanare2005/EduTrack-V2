@@ -20,9 +20,10 @@ export const CurrencyInput: React.FC<CurrencyInputProps> = ({
   };
 
   // Format currency with Indian local rules for thousands separation (e.g. 10,00,000)
-  const formatCurrency = (val: number): string => {
-    if (val === 0) return '';
-    return val.toLocaleString('en-IN');
+  const formatCurrency = (val: number | string): string => {
+    const num = Number(val);
+    if (!num || isNaN(num) || num === 0) return '';
+    return num.toLocaleString('en-IN');
   };
 
   return (

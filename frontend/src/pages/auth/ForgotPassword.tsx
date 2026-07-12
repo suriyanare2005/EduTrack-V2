@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
+import { apiRequest } from '../../lib/api';
+import { Link } from 'react-router-dom';
 
 const forgotPasswordSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -36,18 +38,22 @@ export const ForgotPassword: React.FC = () => {
 
   const emailValue = watch('email');
 
-  const onSubmit = async (_data: ForgotPasswordValues) => {
+  const onSubmit = async (data: ForgotPasswordValues) => {
     setIsSubmitting(true);
     try {
-      // Mock API call delay
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      // TODO: Configure SMTP or professional email sending service (e.g. SendGrid, Mailgun, Amazon SES)
+      // inside the backend router at `POST /api/auth/reset-password` to transmit real reset links.
+      await apiRequest('/api/auth/reset-password', {
+        method: 'POST',
+        body: JSON.stringify({ email: data.email }),
+      });
       setEmailSent(true);
       toast.success('Reset link sent!', {
         description: 'Check your email inbox for password recovery instructions.',
       });
-    } catch (error) {
+    } catch (error: any) {
       toast.error('Error sending link', {
-        description: 'Please double-check your email and try again.',
+        description: error.message || 'Please double-check your email and try again.',
       });
     } finally {
       setIsSubmitting(false);
@@ -120,9 +126,20 @@ export const ForgotPassword: React.FC = () => {
               </div>
               
               <h2 className="text-2xl font-bold text-text-primary tracking-tight mb-2">Check your inbox</h2>
-              <p className="text-text-secondary text-sm leading-relaxed max-w-xs mb-8">
+              <p className="text-text-secondary text-sm leading-relaxed max-w-xs mb-4">
                 We've sent a password recovery link to <span className="font-semibold text-text-primary">{emailValue}</span>. Please click the link to reset your password.
               </p>
+
+              <div className="mt-2 p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-900/40 rounded-2xl text-[11px] text-amber-800 dark:text-amber-300 w-full mb-6 text-left">
+                <span className="font-bold block mb-1">🛠️ Development Integration Notice:</span>
+                Since SMTP/email service is not configured (see backend code TODOs), you can test the password reset screen directly:
+                <Link
+                  to={`/auth/reset-password?email=${encodeURIComponent(emailValue)}&token=mock-reset-token`}
+                  className="font-bold underline text-primary block mt-1 hover:text-primary-light"
+                >
+                  Open Password Reset Page &rarr;
+                </Link>
+              </div>
 
               <Button
                 onClick={() => navigate('/auth/login')}

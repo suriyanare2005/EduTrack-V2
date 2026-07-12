@@ -10,7 +10,7 @@ interface UIState {
 
 export const useUIStore = create<UIState>((set, get) => ({
   darkMode: false,
-  notificationCount: 3, // Mock default unread count
+  notificationCount: 0,
   toggleDarkMode: () => {
     const nextMode = !get().darkMode;
     set({ darkMode: nextMode });

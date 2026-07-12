@@ -23,6 +23,8 @@ interface AuthState {
   // API triggers
   loginAction: (email: string, password: string) => Promise<any>;
   registerAction: (email: string, password: string, fullName: string) => Promise<any>;
+  googleLoginAction: (idToken: string) => Promise<any>;
+  updateProfileAction: (fullName: string, email: string) => Promise<UserProfile>;
   checkSessionAction: () => Promise<void>;
 }
 
@@ -73,6 +75,49 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       body: JSON.stringify({ email, password, full_name: fullName }),
     });
     return user;
+  },
+
+  googleLoginAction: async (idToken) => {
+    const data = await apiRequest<{ access_token: string; token_type: string; user: any }>('/api/auth/google', {
+      method: 'POST',
+      body: JSON.stringify({ id_token: idToken }),
+    });
+
+    localStorage.setItem('token', data.access_token);
+    
+    const userProfile: UserProfile = {
+      id: data.user.id,
+      fullName: data.user.full_name,
+      email: data.user.email,
+      created_at: data.user.created_at,
+    };
+
+    set({
+      user: data.user,
+      profile: userProfile,
+      session: data.access_token,
+      loading: false,
+    });
+
+    return data.user;
+  },
+
+  updateProfileAction: async (fullName, email) => {
+    const user = await apiRequest<any>('/api/auth/me', {
+      method: 'PUT',
+      body: JSON.stringify({ fullName, email }),
+    });
+    const userProfile: UserProfile = {
+      id: user.id,
+      fullName: user.full_name,
+      email: user.email,
+      created_at: user.created_at,
+    };
+    set({
+      user,
+      profile: userProfile,
+    });
+    return userProfile;
   },
 
   checkSessionAction: async () => {

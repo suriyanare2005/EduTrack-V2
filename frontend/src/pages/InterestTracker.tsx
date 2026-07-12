@@ -9,9 +9,11 @@ import { toast } from 'sonner';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { Download } from 'lucide-react';
 import { format, subMonths } from 'date-fns';
+import { calculateAccruedInterest, getInterestForMonth, calculateMoratoriumInterest } from '../lib/finance';
 
 export const InterestTracker: React.FC = () => {
   const loans = useLoansStore((state) => state.loans);
+  const payments = useLoansStore((state) => state.payments);
 
   // Selected Loan ID (All or specific loan ID)
   const [selectedLoanId, setSelectedLoanId] = useState<string>('all');
@@ -27,30 +29,48 @@ export const InterestTracker: React.FC = () => {
     }
 
     if (selectedLoanId !== 'all' && selectedLoan) {
-      const isSBI = selectedLoan.id === 'loan-sbi-123';
-      const totalAccrued = isSBI ? 145000 : 18900;
-      const totalMoratorium = isSBI ? 104500 : 18900;
-      const totalRepayment = isSBI ? 40500 : 0;
+      const totalAccrued = calculateAccruedInterest(selectedLoan, payments);
+      
+      let totalMoratorium = 0;
+      if (selectedLoan.moratorium?.enabled) {
+        const now = new Date();
+        const morStart = new Date(selectedLoan.moratorium.startDate);
+        const morEnd = new Date(selectedLoan.moratorium.endDate);
+        const effectiveMorEnd = now < morEnd ? now : morEnd;
+        if (effectiveMorEnd > morStart) {
+          totalMoratorium = calculateMoratoriumInterest(
+            selectedLoan.principal,
+            selectedLoan.interestRate,
+            selectedLoan.moratorium.startDate,
+            effectiveMorEnd.toISOString().split('T')[0]
+          );
+        }
+      }
+      
+      const totalRepayment = Math.max(0, totalAccrued - totalMoratorium);
       return { totalAccrued, totalMoratorium, totalRepayment };
     }
 
     // "All" selected
-    const totalAccrued = loans.reduce((acc, loan) => {
-      if (loan.id === 'loan-sbi-123') return acc + 145000;
-      if (loan.id === 'loan-hdfc-456') return acc + 18900;
-      return acc + (loan.principal * 0.05);
-    }, 0);
-
+    const totalAccrued = loans.reduce((acc, loan) => acc + calculateAccruedInterest(loan, payments), 0);
     const totalMoratorium = loans.reduce((acc, loan) => {
-      if (loan.id === 'loan-sbi-123') return acc + 104500;
-      if (loan.id === 'loan-hdfc-456') return acc + 18900;
-      return acc + (loan.principal * 0.03);
+      if (!loan.moratorium?.enabled) return acc;
+      const now = new Date();
+      const morStart = new Date(loan.moratorium.startDate);
+      const morEnd = new Date(loan.moratorium.endDate);
+      const effectiveMorEnd = now < morEnd ? now : morEnd;
+      if (effectiveMorEnd <= morStart) return acc;
+      return acc + calculateMoratoriumInterest(
+        loan.principal,
+        loan.interestRate,
+        loan.moratorium.startDate,
+        effectiveMorEnd.toISOString().split('T')[0]
+      );
     }, 0);
-
     const totalRepayment = Math.max(0, totalAccrued - totalMoratorium);
 
     return { totalAccrued, totalMoratorium, totalRepayment };
-  }, [loans, selectedLoanId, selectedLoan]);
+  }, [loans, selectedLoanId, selectedLoan, payments]);
 
   // Chart data (Last 12 months)
   const chartData = useMemo(() => {
@@ -61,44 +81,35 @@ export const InterestTracker: React.FC = () => {
       const d = subMonths(now, i);
       const label = format(d, 'MMM yy');
       
-      let sbiAccrual = 0;
-      let hdfcAccrual = 0;
-
-      // SBI: mor ended 2024-07. Active repayment since.
-      // Monthly interest: SBI outstanding is around 12L. 12L * 9.55% / 12 = ~9.5k.
-      // Moratorium interest was around 12k monthly.
-      if (i >= 8) {
-        // Moratorium phase
-        sbiAccrual = 11937; 
-      } else {
-        // Repayment phase
-        sbiAccrual = 9800 - (11 - i) * 60;
-      }
-
-      // HDFC: started 2026-01. Active moratorium.
-      // Monthly interest: 4L * 11.2% / 12 = 3733.
-      if (i <= 5) {
-        hdfcAccrual = 3733;
-      }
-
       let interest = 0;
+      let isMoratorium = false;
+      
       if (selectedLoanId === 'all') {
-        interest = sbiAccrual + hdfcAccrual;
-      } else if (selectedLoanId === 'loan-sbi-123') {
-        interest = sbiAccrual;
-      } else if (selectedLoanId === 'loan-hdfc-456') {
-        interest = hdfcAccrual;
+        interest = loans.reduce((acc, loan) => acc + getInterestForMonth(loan, d, payments), 0);
+        isMoratorium = loans.some((loan) => {
+          if (!loan.moratorium?.enabled) return false;
+          const morStart = new Date(loan.moratorium.startDate);
+          const morEnd = new Date(loan.moratorium.endDate);
+          return d >= morStart && d <= morEnd;
+        });
+      } else if (selectedLoan) {
+        interest = getInterestForMonth(selectedLoan, d, payments);
+        if (selectedLoan.moratorium?.enabled) {
+          const morStart = new Date(selectedLoan.moratorium.startDate);
+          const morEnd = new Date(selectedLoan.moratorium.endDate);
+          isMoratorium = d >= morStart && d <= morEnd;
+        }
       }
-
+      
       data.push({
         name: label,
         Interest: Math.round(interest),
-        isMoratorium: selectedLoanId === 'loan-hdfc-456' || (selectedLoanId === 'all' && i <= 5) || (selectedLoanId === 'loan-sbi-123' && i >= 8),
+        isMoratorium,
       });
     }
 
     return data;
-  }, [selectedLoanId]);
+  }, [loans, selectedLoanId, selectedLoan, payments]);
 
   // Table breakdown rows
   const breakdownRows = useMemo(() => {
@@ -109,35 +120,33 @@ export const InterestTracker: React.FC = () => {
       const d = subMonths(now, i);
       const label = format(d, 'MMMM yyyy');
       
-      let rate = 9.55;
-      let accrued = 9800;
-      let type = 'Compound';
-
-      if (selectedLoanId === 'loan-sbi-123') {
-        rate = 9.55;
-        accrued = 9800 - i * 60;
-        type = 'Compound';
-      } else if (selectedLoanId === 'loan-hdfc-456') {
-        rate = 11.2;
-        accrued = 3733;
-        type = 'Simple';
-      } else {
-        // All
-        rate = 10.37; // average
-        accrued = (9800 - i * 60) + (i <= 5 ? 3733 : 0);
-        type = 'Mixed';
+      let rate = 0;
+      let accrued = 0;
+      let type = 'None';
+      
+      if (selectedLoanId !== 'all' && selectedLoan) {
+        rate = selectedLoan.interestRate;
+        accrued = getInterestForMonth(selectedLoan, d, payments);
+        type = selectedLoan.interestType.charAt(0).toUpperCase() + selectedLoan.interestType.slice(1);
+      } else if (loans.length > 0) {
+        rate = loans.reduce((acc, l) => acc + l.interestRate, 0) / loans.length;
+        accrued = loans.reduce((acc, l) => acc + getInterestForMonth(l, d, payments), 0);
+        const types = new Set(loans.map((l) => l.interestType));
+        type = types.size > 1 ? 'Mixed' : (types.has('simple') ? 'Simple' : 'Compound');
       }
-
+      
+      const days = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+ 
       rows.push({
         month: label,
-        days: 30,
-        rate,
+        days,
+        rate: parseFloat(rate.toFixed(2)),
         accrued: Math.round(accrued),
         type,
       });
     }
     return rows;
-  }, [selectedLoanId]);
+  }, [loans, selectedLoanId, selectedLoan, payments]);
 
   // Formatting helpers
   const formatCurrency = (val: number) => {
